@@ -1,4 +1,14 @@
 import { Elysia } from "elysia";
+import { sql } from "../db/client";
+import { redis } from "../redis";
 
-// Deep checks (Postgres/Redis pings) are added in Task 2 once clients exist.
-export const healthRoutes = new Elysia().get("/health", () => ({ status: "ok" }));
+export const healthRoutes = new Elysia().get("/health", async ({ set }) => {
+  try {
+    await sql`SELECT 1`;
+    await redis.ping();
+    return { status: "ok" };
+  } catch {
+    set.status = 503;
+    return { status: "degraded" }; // deliberately no detail — this endpoint is public
+  }
+});
