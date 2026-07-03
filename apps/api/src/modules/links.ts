@@ -1,5 +1,5 @@
 import { Elysia, t } from "elysia";
-import { and, count, desc, eq, getTableColumns, ilike, or } from "drizzle-orm";
+import { and, count, desc, eq, getTableColumns, ilike, or, gte, sql } from "drizzle-orm";
 import { db } from "../db/client";
 import { clickEvents, links } from "../db/schema";
 import { env } from "../env";
@@ -192,4 +192,61 @@ export const linkRoutes = new Elysia({ prefix: "/api/v1/links" })
     await db.delete(links).where(eq(links.id, row.id)); // click_events cascade
     await redis.del(`link:${row.slug}`);
     return { ok: true };
-  });
+  })
+  .get(
+    "/:id/stats",
+    async ({ params, query, session, set }) => {
+      if (!session) return apiError(set, 401, "UNAUTHORIZED", "Not logged in");
+      const row = await db.query.links.findFirst({ where: eq(links.id, params.id) });
+      if (!row || (session.role !== "admin" && row.ownerId !== session.userId)) {
+        return apiError(set, 404, "NOT_FOUND", "Link not found");
+      }
+      const range = query.range ?? "30d";
+      const since =
+        range === "all" ? null : new Date(Date.now() - (range === "7d" ? 7 : 30) * 24 * 60 * 60 * 1000);
+      const where = and(
+        eq(clickEvents.linkId, row.id),
+        since ? gte(clickEvents.clickedAt, since) : undefined,
+      );
+
+      // Plain GROUP BY aggregates — the whole stats page is four SQL queries.
+      const [totalRow] = await db.select({ value: count() }).from(clickEvents).where(where);
+      const byDay = await db
+        .select({
+          day: sql<string>`to_char(date_trunc('day', ${clickEvents.clickedAt}), 'YYYY-MM-DD')`,
+          count: count(),
+        })
+        .from(clickEvents)
+        .where(where)
+        .groupBy(sql`1`)
+        .orderBy(sql`1`);
+      const topReferrers = await db
+        .select({
+          referrer: sql<string>`coalesce(${clickEvents.referrer}, '(direct)')`,
+          count: count(),
+        })
+        .from(clickEvents)
+        .where(where)
+        .groupBy(sql`1`)
+        .orderBy(desc(count()))
+        .limit(10);
+      const byCountry = await db
+        .select({
+          country: sql<string>`coalesce(${clickEvents.country}, '(unknown)')`,
+          count: count(),
+        })
+        .from(clickEvents)
+        .where(where)
+        .groupBy(sql`1`)
+        .orderBy(desc(count()));
+      const byDevice = await db
+        .select({ deviceType: clickEvents.deviceType, count: count() })
+        .from(clickEvents)
+        .where(where)
+        .groupBy(clickEvents.deviceType)
+        .orderBy(desc(count()));
+
+      return { total: totalRow!.value, byDay, topReferrers, byCountry, byDevice };
+    },
+    { query: t.Object({ range: t.Optional(t.Union([t.Literal("7d"), t.Literal("30d"), t.Literal("all")])) }) },
+  );
