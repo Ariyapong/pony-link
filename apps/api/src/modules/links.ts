@@ -1,7 +1,7 @@
 import { Elysia, t } from "elysia";
-import { eq } from "drizzle-orm";
+import { and, count, desc, eq, getTableColumns, ilike, or } from "drizzle-orm";
 import { db } from "../db/client";
-import { links } from "../db/schema";
+import { clickEvents, links } from "../db/schema";
 import { env } from "../env";
 import { apiError } from "../lib/errors";
 import { rateLimit } from "../lib/rate-limit";
@@ -89,4 +89,107 @@ export const linkRoutes = new Elysia({ prefix: "/api/v1/links" })
         title: t.Optional(t.String({ maxLength: 200 })),
       }),
     },
-  );
+  )
+  .get(
+    "/",
+    async ({ query, session, set }) => {
+      if (!session) return apiError(set, 401, "UNAUTHORIZED", "Not logged in");
+      const page = Math.max(1, query.page ?? 1);
+      const limit = Math.min(100, Math.max(1, query.limit ?? 20));
+      const scope = session.role === "admin" ? undefined : eq(links.ownerId, session.userId);
+      const search = query.query
+        ? or(ilike(links.slug, `%${query.query}%`), ilike(links.title, `%${query.query}%`))
+        : undefined;
+      const where = and(scope, search); // and() ignores undefined members
+
+      const rows = await db
+        .select({ ...getTableColumns(links), clickCount: count(clickEvents.id) })
+        .from(links)
+        .leftJoin(clickEvents, eq(clickEvents.linkId, links.id))
+        .where(where)
+        .groupBy(links.id)
+        .orderBy(desc(links.createdAt))
+        .limit(limit)
+        .offset((page - 1) * limit);
+      const [totalRow] = await db.select({ value: count() }).from(links).where(where);
+
+      return {
+        links: rows.map((r) => publicLink(r, r.clickCount)),
+        total: totalRow!.value,
+        page,
+        limit,
+      };
+    },
+    {
+      query: t.Object({
+        query: t.Optional(t.String()),
+        page: t.Optional(t.Numeric()),
+        limit: t.Optional(t.Numeric()),
+      }),
+    },
+  )
+  .get("/:id", async ({ params, session, set }) => {
+    if (!session) return apiError(set, 401, "UNAUTHORIZED", "Not logged in");
+    const row = await db.query.links.findFirst({ where: eq(links.id, params.id) });
+    // 404 for "not yours" too — don't reveal that the id exists.
+    if (!row || (session.role !== "admin" && row.ownerId !== session.userId)) {
+      return apiError(set, 404, "NOT_FOUND", "Link not found");
+    }
+    const [clicks] = await db
+      .select({ value: count() })
+      .from(clickEvents)
+      .where(eq(clickEvents.linkId, row.id));
+    return { link: publicLink(row, clicks!.value) };
+  })
+  .patch(
+    "/:id",
+    async ({ params, body, session, set }) => {
+      if (!session) return apiError(set, 401, "UNAUTHORIZED", "Not logged in");
+      // Mutations share the api:<user> bucket; reads are exempt (search-as-you-type).
+      if (!(await rateLimit(`api:${session.userId}`, 60, 60))) {
+        return apiError(set, 429, "RATE_LIMITED", "Slow down");
+      }
+      const row = await db.query.links.findFirst({ where: eq(links.id, params.id) });
+      if (!row || (session.role !== "admin" && row.ownerId !== session.userId)) {
+        return apiError(set, 404, "NOT_FOUND", "Link not found");
+      }
+      if (body.targetUrl !== undefined) {
+        const urlError = validateTargetUrl(body.targetUrl, OWN_HOST);
+        if (urlError) return apiError(set, 422, "VALIDATION", urlError);
+      }
+      const [updated] = await db
+        .update(links)
+        .set({
+          ...(body.targetUrl !== undefined ? { targetUrl: body.targetUrl } : {}),
+          ...(body.title !== undefined ? { title: body.title } : {}),
+          ...(body.isActive !== undefined ? { isActive: body.isActive } : {}),
+          updatedAt: new Date(),
+        })
+        .where(eq(links.id, row.id))
+        .returning();
+      // BOTH keys: link: (stale target) and miss: (an inactive link negative-caches;
+      // re-activating must clear that or the link stays 404 for up to 5 minutes).
+      await redis.del(`link:${row.slug}`, `miss:${row.slug}`);
+      return { link: publicLink(updated!) };
+    },
+    {
+      body: t.Object({
+        targetUrl: t.Optional(t.String()),
+        title: t.Optional(t.Union([t.String({ maxLength: 200 }), t.Null()])),
+        isActive: t.Optional(t.Boolean()),
+      }),
+    },
+  )
+  .delete("/:id", async ({ params, session, set }) => {
+    if (!session) return apiError(set, 401, "UNAUTHORIZED", "Not logged in");
+    if (!(await rateLimit(`api:${session.userId}`, 60, 60))) {
+      return apiError(set, 429, "RATE_LIMITED", "Slow down");
+    }
+    const row = await db.query.links.findFirst({ where: eq(links.id, params.id) });
+    if (!row || (session.role !== "admin" && row.ownerId !== session.userId)) {
+      return apiError(set, 404, "NOT_FOUND", "Link not found");
+    }
+    await db.delete(links).where(eq(links.id, row.id)); // click_events cascade
+    await redis.del(`link:${row.slug}`);
+    return { ok: true };
+  });
