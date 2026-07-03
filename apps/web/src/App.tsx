@@ -3,6 +3,8 @@ import { AuthProvider, RequireAuth, useAuth } from "./auth";
 import Login from "./pages/Login";
 import Links from "./pages/Links";
 import LinkDetail from "./pages/LinkDetail";
+import Invites from "./pages/Invites";
+import Register from "./pages/Register";
 
 function Nav() {
   const { user, logout } = useAuth();
@@ -23,8 +25,6 @@ function Nav() {
   );
 }
 
-// Placeholder pages — replaced in Tasks 17-18.
-const Stub = ({ name }: { name: string }) => <p className="p-8">{name} (coming in a later task)</p>;
 
 export default function App() {
   return (
@@ -33,10 +33,10 @@ export default function App() {
         <Nav />
         <Routes>
           <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Stub name="Register" />} />
+          <Route path="/register" element={<Register />} />
           <Route path="/" element={<RequireAuth><Links /></RequireAuth>} />
           <Route path="/links/:id" element={<RequireAuth><LinkDetail /></RequireAuth>} />
-          <Route path="/invites" element={<RequireAuth><Stub name="Invites" /></RequireAuth>} />
+          <Route path="/invites" element={<RequireAuth><Invites /></RequireAuth>} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>
