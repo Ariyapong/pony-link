@@ -1,0 +1,9 @@
+# Origin TLS = Cloudflare Origin CA cert (spec §3): ACME can't work behind the
+# orange cloud, and browsers not trusting this cert is a feature — direct-to-IP
+# visits fail TLS even if the firewall ever slips.
+s.aritoton.com {
+	tls /etc/caddy/certs/origin.pem /etc/caddy/certs/origin-key.pem
+	encode gzip
+	header Strict-Transport-Security "max-age=31536000; includeSubDomains"
+	reverse_proxy app:3000
+}
