@@ -4,6 +4,7 @@ import { apiError } from "./lib/errors";
 import { authRoutes } from "./modules/auth";
 import { healthRoutes } from "./modules/health";
 import { inviteRoutes } from "./modules/invites";
+import { linkRoutes } from "./modules/links";
 
 const MUTATING = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
@@ -55,6 +56,7 @@ export const app = new Elysia()
   })
   .use(healthRoutes)
   .use(authRoutes)
-  .use(inviteRoutes);
+  .use(inviteRoutes)
+  .use(linkRoutes);
 
 export type App = typeof app;
