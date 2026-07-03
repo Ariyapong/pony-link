@@ -1,5 +1,6 @@
 import { Elysia } from "elysia";
 import { resolve } from "node:path";
+import type { SetLike } from "../lib/errors";
 
 // Resolve the URL relative to this file, then make it absolute
 const SPA_DIR = resolve(new URL("../../public/app", import.meta.url).pathname);
@@ -24,7 +25,13 @@ async function serve(relPath: string): Promise<Response | null> {
   return null;
 }
 
-function notFoundResponse(): Response {
+// set.status defaults to Elysia's implicit 200 for a returned raw Response,
+// which is what app.ts's onAfterResponse access-log reads (it can't inspect
+// a returned Response object's own .status) — so every 404 path here must
+// set it explicitly, same convention redirect.ts documents. The 200 paths
+// (serve() found a real file) are fine implicitly and don't need to set it.
+function notFoundResponse(set: SetLike): Response {
+  set.status = 404;
   return new Response("Dashboard build not found (dev mode: use the Vite server on :5173)", {
     status: 404, headers: { "cache-control": "no-store" },
   });
@@ -38,18 +45,18 @@ function safeDecode(raw: string): string | null {
   }
 }
 
-async function serveSpa(relPath: string): Promise<Response> {
+async function serveSpa(relPath: string, set: SetLike): Promise<Response> {
   const exact = await serve(relPath);
   if (exact) return exact;
   const index = await serve("index.html"); // client-side route fallback
   if (index) return index;
-  return notFoundResponse();
+  return notFoundResponse(set);
 }
 
 export const spaRoutes = new Elysia()
-  .get("/app", () => serveSpa("index.html"))
-  .get("/app/*", ({ params }) => {
+  .get("/app", ({ set }) => serveSpa("index.html", set))
+  .get("/app/*", ({ params, set }) => {
     const decoded = safeDecode(params["*"]);
-    if (decoded === null) return notFoundResponse();
-    return serveSpa(decoded);
+    if (decoded === null) return notFoundResponse(set);
+    return serveSpa(decoded, set);
   });

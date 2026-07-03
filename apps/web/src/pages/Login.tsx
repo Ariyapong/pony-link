@@ -39,6 +39,9 @@ export default function Login() {
           {busy ? "Logging in…" : "Log in"}
         </button>
       </form>
+      <p className="mt-6 text-center text-sm text-gray-400">
+        <a href="https://www.aritoton.com" className="underline">aritoton.com</a>
+      </p>
     </div>
   );
 }

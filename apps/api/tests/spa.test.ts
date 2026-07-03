@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, it } from "bun:test";
+import { beforeAll, describe, expect, it, spyOn } from "bun:test";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { app } from "../src/app";
 
@@ -42,5 +42,15 @@ describe("SPA serving", () => {
   it("returns 404, not 500, for malformed percent-encoding", async () => {
     const res = await hit("/app/%");
     expect(res.status).toBe(404);
+  });
+
+  it("SPA 404 (malformed percent-encoding) sets set.status so the access log records 404, not the implicit 200", async () => {
+    const spy = spyOn(console, "log").mockImplementation(() => {});
+    await hit("/app/%");
+    await new Promise((r) => setTimeout(r, 50)); // onAfterResponse (access-log hook) runs after handle() resolves
+    const logged = spy.mock.calls.map((c) => JSON.parse(c[0] as string));
+    spy.mockRestore();
+    const line = logged.find((l) => l.path === "/app/%");
+    expect(line?.status).toBe(404);
   });
 });

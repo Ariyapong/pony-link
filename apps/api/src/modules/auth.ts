@@ -1,4 +1,4 @@
-import { Elysia, t } from "elysia";
+import { Elysia, t, type Cookie } from "elysia";
 import { and, eq, isNull } from "drizzle-orm";
 import { db } from "../db/client";
 import { invites, users } from "../db/schema";
@@ -20,6 +20,18 @@ const DUMMY_HASH = await Bun.password.hash("timing-equalizer-dummy");
 type UserRow = typeof users.$inferSelect;
 export function publicUser(u: UserRow) {
   return { id: u.id, email: u.email, displayName: u.displayName, role: u.role };
+}
+
+/** Shared by login/register (initial issue) and GET /me (sliding re-issue). */
+function setSessionCookie(cookie: Cookie<unknown>, sid: string): void {
+  cookie.set({
+    value: sid,
+    httpOnly: true,
+    secure: env.isProd, // localhost has no https in dev (design spec §12)
+    sameSite: "lax",
+    path: "/",
+    maxAge: SESSION_TTL_SECONDS,
+  });
 }
 
 export const authRoutes = new Elysia({ prefix: "/api/v1/auth" })
@@ -44,14 +56,7 @@ export const authRoutes = new Elysia({ prefix: "/api/v1/auth" })
       const ok = user !== undefined && valid;
       if (!ok) return apiError(set, 401, "INVALID_CREDENTIALS", "Email or password is incorrect");
       const sid = await createSession({ userId: user.id, role: user.role });
-      cookie.sid!.set({
-        value: sid,
-        httpOnly: true,
-        secure: env.isProd, // localhost has no https in dev (design spec §12)
-        sameSite: "lax",
-        path: "/",
-        maxAge: SESSION_TTL_SECONDS,
-      });
+      setSessionCookie(cookie.sid!, sid);
       return { user: publicUser(user) };
     },
     { body: t.Object({ email: t.String(), password: t.String({ minLength: 8 }) }) },
@@ -62,10 +67,18 @@ export const authRoutes = new Elysia({ prefix: "/api/v1/auth" })
     set.status = 200;
     return { ok: true };
   })
-  .get("/me", async ({ session, set }) => {
+  .get("/me", async ({ session, sid, cookie, set }) => {
     if (!session) return apiError(set, 401, "UNAUTHORIZED", "Not logged in");
     const user = await db.query.users.findFirst({ where: eq(users.id, session.userId) });
     if (!user) return apiError(set, 401, "UNAUTHORIZED", "Not logged in");
+    // Dashboard visits slide the cookie's Max-Age to match the Redis TTL
+    // slide getSession() already does on every read — otherwise an active
+    // user's Redis session keeps renewing forever but the browser stops
+    // sending the cookie after the original 30-day Max-Age and they're
+    // logged out anyway. Redirects deliberately don't do this: the redirect
+    // path never touches auth cookies at all (it's not an authenticated
+    // surface), so there's nothing to slide there.
+    if (sid) setSessionCookie(cookie.sid!, sid);
     return { user: publicUser(user) };
   })
   .post(
@@ -113,14 +126,7 @@ export const authRoutes = new Elysia({ prefix: "/api/v1/auth" })
           return u!;
         });
         const sid = await createSession({ userId: user.id, role: user.role });
-        cookie.sid!.set({
-          value: sid,
-          httpOnly: true,
-          secure: env.isProd,
-          sameSite: "lax",
-          path: "/",
-          maxAge: SESSION_TTL_SECONDS,
-        });
+        setSessionCookie(cookie.sid!, sid);
         set.status = 201;
         return { user: publicUser(user) };
       } catch (e: unknown) {
