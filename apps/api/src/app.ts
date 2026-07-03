@@ -5,6 +5,7 @@ import { authRoutes } from "./modules/auth";
 import { healthRoutes } from "./modules/health";
 import { inviteRoutes } from "./modules/invites";
 import { linkRoutes } from "./modules/links";
+import { spaRoutes } from "./modules/spa";
 import { redirectRoutes } from "./modules/redirect";
 
 const MUTATING = new Set(["POST", "PUT", "PATCH", "DELETE"]);
@@ -59,6 +60,7 @@ export const app = new Elysia()
   .use(authRoutes)
   .use(inviteRoutes)
   .use(linkRoutes)
+  .use(spaRoutes)
   .use(redirectRoutes);
 
 export type App = typeof app;
