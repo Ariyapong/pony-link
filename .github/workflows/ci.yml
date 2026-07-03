@@ -1,0 +1,40 @@
+name: ci
+
+on:
+  push:
+    branches: [main, v1]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: shortener
+          POSTGRES_PASSWORD: shortener
+          POSTGRES_DB: shortener
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U shortener"
+          --health-interval 5s --health-timeout 3s --health-retries 12
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 3s --health-retries 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - name: Typecheck api
+        run: bunx tsc --noEmit
+        working-directory: apps/api
+      - name: Test api (integration tests hit the service containers)
+        run: bun test
+        working-directory: apps/api
+      - name: Typecheck + build web
+        run: bun run build
+        working-directory: apps/web
