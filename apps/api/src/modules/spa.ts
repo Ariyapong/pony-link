@@ -12,7 +12,7 @@ const CSP =
 async function serve(relPath: string): Promise<Response | null> {
   const fullPath = resolve(SPA_DIR, relPath);
   // Verify path doesn't escape SPA_DIR
-  if (!fullPath.startsWith(resolve(SPA_DIR) + "/") && fullPath !== resolve(SPA_DIR)) {
+  if (!fullPath.startsWith(SPA_DIR + "/") && fullPath !== SPA_DIR) {
     return null;
   }
   const file = Bun.file(fullPath);
@@ -24,16 +24,32 @@ async function serve(relPath: string): Promise<Response | null> {
   return null;
 }
 
-async function serveSpa(relPath: string): Promise<Response> {
-  const exact = await serve(relPath);
-  if (exact) return exact;
-  const index = await serve("index.html"); // client-side route fallback
-  if (index) return index;
+function notFoundResponse(): Response {
   return new Response("Dashboard build not found (dev mode: use the Vite server on :5173)", {
     status: 404, headers: { "cache-control": "no-store" },
   });
 }
 
+function safeDecode(raw: string): string | null {
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return null; // malformed percent-encoding — treat as not-found, not a 500
+  }
+}
+
+async function serveSpa(relPath: string): Promise<Response> {
+  const exact = await serve(relPath);
+  if (exact) return exact;
+  const index = await serve("index.html"); // client-side route fallback
+  if (index) return index;
+  return notFoundResponse();
+}
+
 export const spaRoutes = new Elysia()
   .get("/app", () => serveSpa("index.html"))
-  .get("/app/*", ({ params }) => serveSpa(decodeURIComponent(params["*"])));
+  .get("/app/*", ({ params }) => {
+    const decoded = safeDecode(params["*"]);
+    if (decoded === null) return notFoundResponse();
+    return serveSpa(decoded);
+  });

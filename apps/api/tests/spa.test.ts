@@ -38,4 +38,9 @@ describe("SPA serving", () => {
     const text = await res.text();
     expect(text).not.toContain('"name"');
   });
+
+  it("returns 404, not 500, for malformed percent-encoding", async () => {
+    const res = await hit("/app/%");
+    expect(res.status).toBe(404);
+  });
 });
