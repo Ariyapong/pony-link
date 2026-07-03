@@ -1,6 +1,7 @@
 import { Elysia } from "elysia";
 import { env } from "./env";
 import { apiError } from "./lib/errors";
+import { authRoutes } from "./modules/auth";
 import { healthRoutes } from "./modules/health";
 
 const MUTATING = new Set(["POST", "PUT", "PATCH", "DELETE"]);
@@ -51,6 +52,7 @@ export const app = new Elysia()
     console.error(error);
     return apiError(set, 500, "INTERNAL", "Internal server error");
   })
-  .use(healthRoutes);
+  .use(healthRoutes)
+  .use(authRoutes);
 
 export type App = typeof app;
