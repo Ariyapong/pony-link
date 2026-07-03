@@ -1,0 +1,28 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    profiles: [dev]
+    environment:
+      POSTGRES_USER: shortener
+      POSTGRES_PASSWORD: shortener
+      POSTGRES_DB: shortener
+    ports:
+      - "127.0.0.1:5432:5432"   # localhost only — never expose a DB publicly, even in dev
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U shortener"]
+      interval: 2s
+      timeout: 2s
+      retries: 15
+  redis:
+    image: redis:7-alpine
+    profiles: [dev]
+    command: redis-server --appendonly yes
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redisdata:/data
+volumes:
+  pgdata:
+  redisdata:
