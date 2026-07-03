@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "bun:test";
+import { beforeEach, describe, expect, it, spyOn } from "bun:test";
 import { randomToken, sha256Hex } from "../src/lib/crypto";
 import { createSession, destroySession, getSession } from "../src/modules/sessions";
 import { redis } from "../src/redis";
@@ -42,5 +42,14 @@ describe("sessions", () => {
     await getSession(sid);
     const ttl = await redis.ttl(`sess:${sid}`);
     expect(ttl).toBeGreaterThan(1000); // bumped back toward 30 days
+  });
+
+  it("fails CLOSED on a corrupt session payload: returns null and deletes the key", async () => {
+    const spy = spyOn(console, "error").mockImplementation(() => {});
+    const sid = "corrupt-sid";
+    await redis.set(`sess:${sid}`, "not-json", "EX", 3600);
+    expect(await getSession(sid)).toBeNull();
+    expect(await redis.get(`sess:${sid}`)).toBeNull();
+    spy.mockRestore();
   });
 });

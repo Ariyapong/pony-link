@@ -13,6 +13,29 @@ const MISS_TTL = 60 * 5; //  5m — blunts slug scanning; cleared on create/patc
 
 type CachedLink = { id: string; url: string };
 
+// Cache is the speed layer; Postgres is truth (spec §3, §15.1). A dead Redis
+// must degrade the redirect path to slower (straight to Postgres), never to
+// dead (500s) — matching the fail-open philosophy the rate limiter and click
+// recording already follow elsewhere in this codebase. These wrap every
+// redis call on the hot path so a Redis outage falls through to the DB
+// instead of throwing.
+async function cacheGet(key: string): Promise<string | null> {
+  try {
+    return await redis.get(key);
+  } catch (err) {
+    console.error(JSON.stringify({ msg: "redirect cache unavailable", op: "get", key, err: String(err) }));
+    return null;
+  }
+}
+
+async function cacheSet(key: string, value: string, ttlSeconds: number): Promise<void> {
+  try {
+    await redis.set(key, value, "EX", ttlSeconds);
+  } catch (err) {
+    console.error(JSON.stringify({ msg: "redirect cache unavailable", op: "set", key, err: String(err) }));
+  }
+}
+
 function notFoundPage(): Response {
   return new Response(
     `<!doctype html><meta charset="utf-8"><title>Not found</title>
@@ -69,7 +92,7 @@ export const redirectRoutes = new Elysia()
     }
 
     // 1) positive cache
-    const cached = await redis.get(`link:${slug}`);
+    const cached = await cacheGet(`link:${slug}`);
     if (cached) {
       let link: CachedLink | null = null;
       try {
@@ -85,19 +108,19 @@ export const redirectRoutes = new Elysia()
       }
     }
     // 2) negative cache — scanners hammer Redis, not Postgres (spec §7)
-    if (await redis.get(`miss:${slug}`)) {
+    if (await cacheGet(`miss:${slug}`)) {
       set.status = 404;
       return notFoundPage();
     }
     // 3) source of truth
     const row = await db.query.links.findFirst({ where: eq(links.slug, slug) });
     if (!row || !row.isActive) {
-      await redis.set(`miss:${slug}`, "1", "EX", MISS_TTL);
+      await cacheSet(`miss:${slug}`, "1", MISS_TTL);
       set.status = 404;
       return notFoundPage();
     }
     const entry: CachedLink = { id: row.id, url: row.targetUrl };
-    await redis.set(`link:${slug}`, JSON.stringify(entry), "EX", LINK_TTL);
+    await cacheSet(`link:${slug}`, JSON.stringify(entry), LINK_TTL);
     void recordClick(row.id, request);
     set.status = 302;
     return redirectTo(row.targetUrl);
