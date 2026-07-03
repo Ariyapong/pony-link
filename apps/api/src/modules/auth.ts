@@ -11,6 +11,11 @@ import { createSession, destroySession, SESSION_TTL_SECONDS } from "./sessions";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+// Verifying against this dummy when the email is unknown equalizes response
+// time with the wrong-password path — otherwise argon2's cost only being paid
+// for real accounts is a timing oracle that leaks which emails exist.
+const DUMMY_HASH = await Bun.password.hash("timing-equalizer-dummy");
+
 type UserRow = typeof users.$inferSelect;
 export function publicUser(u: UserRow) {
   return { id: u.id, email: u.email, displayName: u.displayName, role: u.role };
@@ -32,7 +37,10 @@ export const authRoutes = new Elysia({ prefix: "/api/v1/auth" })
         where: eq(users.email, body.email.toLowerCase()),
       });
       // Same 401 for unknown email and wrong password — don't leak which emails exist.
-      const ok = user && (await Bun.password.verify(body.password, user.passwordHash));
+      // Always run exactly one Bun.password.verify (real hash or dummy) so timing
+      // doesn't reveal whether the email is registered.
+      const valid = await Bun.password.verify(body.password, user?.passwordHash ?? DUMMY_HASH);
+      const ok = user !== undefined && valid;
       if (!ok) return apiError(set, 401, "INVALID_CREDENTIALS", "Email or password is incorrect");
       const sid = await createSession({ userId: user.id, role: user.role });
       cookie.sid!.set({
