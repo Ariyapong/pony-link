@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, spyOn } from "bun:test";
 import { eq } from "drizzle-orm";
 import { app } from "../src/app";
 import { db } from "../src/db/client";
@@ -19,6 +19,7 @@ const settle = () => new Promise((r) => setTimeout(r, 100)); // let fire-and-for
 
 describe("redirect hot path", () => {
   beforeEach(resetAll);
+  afterEach(settle); // contain fire-and-forget recordClick inserts within their owning test
 
   it("302s with no-store and records the click after the response", async () => {
     await seedLink("go-here");
@@ -39,11 +40,17 @@ describe("redirect hot path", () => {
   });
 
   it("serves from cache on the second hit (DB row can vanish, redirect survives)", async () => {
+    // The second hit's recordClick insert is doomed (cache outlives the deleted DB
+    // row) and fails open by design — spy silences that expected log so test output
+    // stays pristine.
+    const spy = spyOn(console, "error").mockImplementation(() => {});
     const row = await seedLink("cached-one");
     await hit("/cached-one");
     await db.delete(links).where(eq(links.id, row.id)); // bypasses API cache invalidation
     const res = await hit("/cached-one");
     expect(res.status).toBe(302); // proof it came from Redis, not Postgres
+    await settle(); // let the doomed fire-and-forget insert fail while the spy is still live
+    spy.mockRestore();
   });
 
   it("negative-caches missing slugs (a later direct-DB insert stays 404 until TTL)", async () => {

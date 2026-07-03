@@ -30,7 +30,7 @@ export async function recordClick(linkId: string, request: Request): Promise<voi
     await db.insert(clickEvents).values({
       linkId,
       referrer: request.headers.get("referer")?.slice(0, 512) ?? null,
-      country: request.headers.get("cf-ipcountry")?.slice(0, 2)?.toUpperCase() ?? null,
+      country: request.headers.get("cf-ipcountry")?.slice(0, 2).toUpperCase() ?? null,
       deviceType: deviceTypeFrom(request.headers.get("user-agent")),
     });
   } catch (err) {
@@ -44,53 +44,61 @@ function redirectTo(url: string): Response {
   return new Response(null, { status: 302, headers: { location: url, "cache-control": "no-store" } });
 }
 
+// NOTE on `set.status`: Elysia honors a returned raw Response's own .status for
+// the actual client-facing reply regardless of `set.status` — so these writes
+// are not needed for correctness of what the browser receives. But app.ts's
+// onAfterResponse access-log logs `set.status ?? 200` (it can't inspect a
+// returned Response object), so without this every redirect/404/429 here would
+// be misreported as 200 in the access log. Every other route module in this
+// codebase sets `set.status` for the same reason; redirect.ts must match.
 export const redirectRoutes = new Elysia()
   .get("/", ({ set }) => {
-    const res = redirectTo("/app");
-    set.status = res.status as any;
-    return res;
+    set.status = 302;
+    return redirectTo("/app");
   })
   .get("/:slug", async ({ params, request, server, set }) => {
     const { slug } = params;
     if (!SLUG_PATH_RE.test(slug)) {
-      const res = notFoundPage();
-      set.status = res.status as any;
-      return res;
+      set.status = 404;
+      return notFoundPage();
     }
 
     if (!(await rateLimit(`redirect:${requestIp(server, request)}`, 300, 60))) {
-      const res = new Response("Too many requests", { status: 429, headers: { "cache-control": "no-store" } });
-      set.status = res.status as any;
-      return res;
+      set.status = 429;
+      return new Response("Too many requests", { status: 429, headers: { "cache-control": "no-store" } });
     }
 
     // 1) positive cache
     const cached = await redis.get(`link:${slug}`);
     if (cached) {
-      const link = JSON.parse(cached) as CachedLink;
-      void recordClick(link.id, request);
-      const res = redirectTo(link.url);
-      set.status = res.status as any;
-      return res;
+      let link: CachedLink | null = null;
+      try {
+        link = JSON.parse(cached) as CachedLink;
+      } catch {
+        // corrupt cache entry — fail open to the DB (falls through below)
+        await redis.del(`link:${slug}`);
+      }
+      if (link) {
+        void recordClick(link.id, request);
+        set.status = 302;
+        return redirectTo(link.url);
+      }
     }
     // 2) negative cache — scanners hammer Redis, not Postgres (spec §7)
     if (await redis.get(`miss:${slug}`)) {
-      const res = notFoundPage();
-      set.status = res.status as any;
-      return res;
+      set.status = 404;
+      return notFoundPage();
     }
     // 3) source of truth
     const row = await db.query.links.findFirst({ where: eq(links.slug, slug) });
     if (!row || !row.isActive) {
       await redis.set(`miss:${slug}`, "1", "EX", MISS_TTL);
-      const res = notFoundPage();
-      set.status = res.status as any;
-      return res;
+      set.status = 404;
+      return notFoundPage();
     }
     const entry: CachedLink = { id: row.id, url: row.targetUrl };
     await redis.set(`link:${slug}`, JSON.stringify(entry), "EX", LINK_TTL);
     void recordClick(row.id, request);
-    const res = redirectTo(row.targetUrl);
-    set.status = res.status as any;
-    return res;
+    set.status = 302;
+    return redirectTo(row.targetUrl);
   });
