@@ -4,7 +4,10 @@
 # Cron (runbook): 0 4 1 * * /opt/shortener/scripts/cloudflare-ufw.sh
 set -euo pipefail
 
-for ip in $(curl -fsS https://www.cloudflare.com/ips-v4) $(curl -fsS https://www.cloudflare.com/ips-v6); do
+ipv4=$(curl -fsS https://www.cloudflare.com/ips-v4)
+ipv6=$(curl -fsS https://www.cloudflare.com/ips-v6)
+
+for ip in $ipv4 $ipv6; do
   ufw allow proto tcp from "$ip" to any port 443 comment cloudflare
 done
 ufw status | grep -c cloudflare
