@@ -2,8 +2,8 @@
   "name": "web",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc --noEmit && node ./node_modules/.bin/vite build",
+    "dev": "bun --bun vite",
+    "build": "tsc --noEmit && bun --bun vite build",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

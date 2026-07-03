@@ -10,10 +10,5 @@
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "resolveJsonModule": true
   },
-  "include": ["src", "../api/src"],
-  "ts-node": {
-    "compilerOptions": {
-      "module": "commonjs"
-    }
-  }
+  "include": ["src", "../api/src"]
 }
