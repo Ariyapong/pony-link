@@ -1,6 +1,8 @@
 import { BrowserRouter, Link, Route, Routes, useNavigate } from "react-router-dom";
 import { AuthProvider, RequireAuth, useAuth } from "./auth";
 import Login from "./pages/Login";
+import Links from "./pages/Links";
+import LinkDetail from "./pages/LinkDetail";
 
 function Nav() {
   const { user, logout } = useAuth();
@@ -32,8 +34,8 @@ export default function App() {
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Stub name="Register" />} />
-          <Route path="/" element={<RequireAuth><Stub name="Links" /></RequireAuth>} />
-          <Route path="/links/:id" element={<RequireAuth><Stub name="Link detail" /></RequireAuth>} />
+          <Route path="/" element={<RequireAuth><Links /></RequireAuth>} />
+          <Route path="/links/:id" element={<RequireAuth><LinkDetail /></RequireAuth>} />
           <Route path="/invites" element={<RequireAuth><Stub name="Invites" /></RequireAuth>} />
         </Routes>
       </BrowserRouter>
