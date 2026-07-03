@@ -3,7 +3,7 @@ import { desc, eq } from "drizzle-orm";
 import { db } from "../db/client";
 import { invites } from "../db/schema";
 import { env } from "../env";
-import { randomToken, sha256Hex } from "../lib/crypto";
+import { randomToken, sha256Hex, UUID_RE } from "../lib/crypto";
 import { apiError } from "../lib/errors";
 import { withSession } from "./auth-context";
 
@@ -66,6 +66,9 @@ export const inviteRoutes = new Elysia({ prefix: "/api/v1/invites" })
   .delete("/:id", async ({ params, session, set }) => {
     if (!session) return apiError(set, 401, "UNAUTHORIZED", "Not logged in");
     if (session.role !== "admin") return apiError(set, 403, "FORBIDDEN", "Admins only");
+    // 404 (not 422) deliberately: a malformed id gets the same response as an
+    // id that exists but isn't yours, so id shape is never confirmed to probers.
+    if (!UUID_RE.test(params.id)) return apiError(set, 404, "NOT_FOUND", "Invite not found");
     const row = await db.query.invites.findFirst({ where: eq(invites.id, params.id) });
     if (!row) return apiError(set, 404, "NOT_FOUND", "Invite not found");
     if (row.usedAt) return apiError(set, 409, "ALREADY_USED", "Invite was already used");

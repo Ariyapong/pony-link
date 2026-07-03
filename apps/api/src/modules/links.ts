@@ -3,6 +3,7 @@ import { and, count, desc, eq, getTableColumns, ilike, or, gte, sql } from "driz
 import { db } from "../db/client";
 import { clickEvents, links } from "../db/schema";
 import { env } from "../env";
+import { UUID_RE } from "../lib/crypto";
 import { apiError } from "../lib/errors";
 import { rateLimit } from "../lib/rate-limit";
 import { generateSlug, validateCustomSlug } from "../lib/slug";
@@ -130,6 +131,9 @@ export const linkRoutes = new Elysia({ prefix: "/api/v1/links" })
   )
   .get("/:id", async ({ params, session, set }) => {
     if (!session) return apiError(set, 401, "UNAUTHORIZED", "Not logged in");
+    // 404 (not 422) deliberately: a malformed id gets the same response as an
+    // id that exists but isn't yours, so id shape is never confirmed to probers.
+    if (!UUID_RE.test(params.id)) return apiError(set, 404, "NOT_FOUND", "Link not found");
     const row = await db.query.links.findFirst({ where: eq(links.id, params.id) });
     // 404 for "not yours" too — don't reveal that the id exists.
     if (!row || (session.role !== "admin" && row.ownerId !== session.userId)) {
@@ -145,6 +149,9 @@ export const linkRoutes = new Elysia({ prefix: "/api/v1/links" })
     "/:id",
     async ({ params, body, session, set }) => {
       if (!session) return apiError(set, 401, "UNAUTHORIZED", "Not logged in");
+      // 404 (not 422) deliberately: a malformed id gets the same response as an
+      // id that exists but isn't yours, so id shape is never confirmed to probers.
+      if (!UUID_RE.test(params.id)) return apiError(set, 404, "NOT_FOUND", "Link not found");
       // Mutations share the api:<user> bucket; reads are exempt (search-as-you-type).
       if (!(await rateLimit(`api:${session.userId}`, 60, 60))) {
         return apiError(set, 429, "RATE_LIMITED", "Slow down");
@@ -182,6 +189,9 @@ export const linkRoutes = new Elysia({ prefix: "/api/v1/links" })
   )
   .delete("/:id", async ({ params, session, set }) => {
     if (!session) return apiError(set, 401, "UNAUTHORIZED", "Not logged in");
+    // 404 (not 422) deliberately: a malformed id gets the same response as an
+    // id that exists but isn't yours, so id shape is never confirmed to probers.
+    if (!UUID_RE.test(params.id)) return apiError(set, 404, "NOT_FOUND", "Link not found");
     if (!(await rateLimit(`api:${session.userId}`, 60, 60))) {
       return apiError(set, 429, "RATE_LIMITED", "Slow down");
     }
@@ -197,6 +207,9 @@ export const linkRoutes = new Elysia({ prefix: "/api/v1/links" })
     "/:id/stats",
     async ({ params, query, session, set }) => {
       if (!session) return apiError(set, 401, "UNAUTHORIZED", "Not logged in");
+      // 404 (not 422) deliberately: a malformed id gets the same response as an
+      // id that exists but isn't yours, so id shape is never confirmed to probers.
+      if (!UUID_RE.test(params.id)) return apiError(set, 404, "NOT_FOUND", "Link not found");
       const row = await db.query.links.findFirst({ where: eq(links.id, params.id) });
       if (!row || (session.role !== "admin" && row.ownerId !== session.userId)) {
         return apiError(set, 404, "NOT_FOUND", "Link not found");

@@ -85,4 +85,21 @@ describe("link management", () => {
     expect(await redis.get("link:del-me")).toBeNull();
     expect((await api(`/api/v1/links/${link.id}`, cookie)).status).toBe(404);
   });
+
+  it("GET/PATCH/DELETE with a malformed id return 404, not a 500 from Postgres 22P02", async () => {
+    const u = await createTestUser();
+    const cookie = await loginAs(u.email, u.password);
+    const get = await api("/api/v1/links/not-a-uuid", cookie);
+    expect(get.status).toBe(404);
+    expect((await get.json()).error.code).toBe("NOT_FOUND");
+    const patch = await api("/api/v1/links/not-a-uuid", cookie, {
+      method: "PATCH",
+      body: JSON.stringify({ title: "x" }),
+    });
+    expect(patch.status).toBe(404);
+    expect((await patch.json()).error.code).toBe("NOT_FOUND");
+    const del = await api("/api/v1/links/not-a-uuid", cookie, { method: "DELETE" });
+    expect(del.status).toBe(404);
+    expect((await del.json()).error.code).toBe("NOT_FOUND");
+  });
 });

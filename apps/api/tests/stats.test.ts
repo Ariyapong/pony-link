@@ -58,4 +58,13 @@ describe("GET /api/v1/links/:id/stats", () => {
     );
     expect(res.status).toBe(404);
   });
+
+  it("404 (not 500) for a malformed link id", async () => {
+    const { cookie } = await seed();
+    const res = await app.handle(
+      new Request("http://localhost/api/v1/links/not-a-uuid/stats", { headers: { cookie } }),
+    );
+    expect(res.status).toBe(404);
+    expect((await res.json()).error.code).toBe("NOT_FOUND");
+  });
 });

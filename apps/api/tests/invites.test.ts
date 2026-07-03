@@ -75,4 +75,11 @@ describe("invites", () => {
     const { invites } = await (await req("/api/v1/invites", { cookie })).json();
     expect(invites).toHaveLength(0);
   });
+
+  it("404 (not 500) for a malformed invite id", async () => {
+    const cookie = await adminCookie();
+    const res = await req("/api/v1/invites/not-a-uuid", { method: "DELETE", cookie });
+    expect(res.status).toBe(404);
+    expect((await res.json()).error.code).toBe("NOT_FOUND");
+  });
 });
