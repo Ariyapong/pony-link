@@ -52,14 +52,21 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      # GHCR requires a lowercase repository path; github.repository_owner
+      # preserves the account's casing (Ariyapong), so lowercase it here.
+      - name: Compute lowercase image name
+        run: echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/pony-link" >> "$GITHUB_ENV"
       - uses: docker/build-push-action@v6
         with:
           context: .
           push: true
           tags: |
-            ghcr.io/${{ github.repository_owner }}/pony-link:latest
-            ghcr.io/${{ github.repository_owner }}/pony-link:${{ github.sha }}
+            ${{ env.IMAGE }}:latest
+            ${{ env.IMAGE }}:${{ github.sha }}
       - name: Deploy over SSH
+        # Skipped until the VPS exists: secrets are added in the runbook's
+        # GitHub step, and this activates automatically on the next push.
+        if: ${{ secrets.VPS_HOST != '' }}
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.VPS_HOST }}
