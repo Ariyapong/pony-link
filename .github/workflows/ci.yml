@@ -45,6 +45,10 @@ jobs:
     permissions:
       contents: read
       packages: write
+    env:
+      # The secrets context isn't allowed in a step-level `if`; bridge it
+      # through job env (allowed) so the SSH step can be gated on it below.
+      VPS_HOST: ${{ secrets.VPS_HOST }}
     steps:
       - uses: actions/checkout@v4
       - uses: docker/login-action@v3
@@ -66,7 +70,7 @@ jobs:
       - name: Deploy over SSH
         # Skipped until the VPS exists: secrets are added in the runbook's
         # GitHub step, and this activates automatically on the next push.
-        if: ${{ secrets.VPS_HOST != '' }}
+        if: ${{ env.VPS_HOST != '' }}
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.VPS_HOST }}
