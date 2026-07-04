@@ -1,5 +1,5 @@
 {
-  "name": "url-shortener",
+  "name": "pony-link",
   "private": true,
   "workspaces": ["apps/*"]
 }

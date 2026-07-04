@@ -12,7 +12,7 @@ function Nav() {
   if (!user) return null;
   return (
     <nav className="flex items-center gap-4 border-b border-gray-200 px-6 py-3">
-      <Link to="/" className="font-semibold">Shortener</Link>
+      <Link to="/" className="font-semibold">Pony Link</Link>
       {user.role === "admin" && <Link to="/invites" className="text-sm">Invites</Link>}
       <span className="ml-auto text-sm text-gray-500">{user.displayName}</span>
       <button

@@ -1,4 +1,4 @@
-# url-shortener
+# pony-link
 
 Invite-only URL shortener behind `s.aritoton.com`. Elysia on Bun, PostgreSQL + Drizzle,
 Redis, React dashboard at `/app`. Built as a backend-learning project — the "why"

@@ -1,5 +1,5 @@
 {
-  "name": "@shortener/api",
+  "name": "@pony-link/api",
   "private": true,
   "type": "module",
   "scripts": {

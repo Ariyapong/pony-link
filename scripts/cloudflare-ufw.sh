@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Allow 443 ONLY from Cloudflare's published ranges (spec §8). Idempotent:
 # ufw ignores duplicate rules. Run monthly via cron; ranges change rarely.
-# Cron (runbook): 0 4 1 * * /opt/shortener/scripts/cloudflare-ufw.sh
+# Cron (runbook): 0 4 1 * * /opt/pony-link/scripts/cloudflare-ufw.sh
 set -euo pipefail
 
 ipv4=$(curl -fsS https://www.cloudflare.com/ips-v4)
