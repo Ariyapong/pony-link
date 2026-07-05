@@ -17,6 +17,17 @@ async function seedLink(slug: string, targetUrl = "https://example.com/target") 
 
 const settle = () => new Promise((r) => setTimeout(r, 100)); // let fire-and-forget insert land
 
+// Fixed sleeps race the fire-and-forget insert on slow CI runners (lost once at
+// 100ms); poll with a generous ceiling instead — fast when it lands fast.
+async function clicksLanded(n: number, timeoutMs = 2000) {
+  const t0 = Date.now();
+  for (;;) {
+    const events = await db.select().from(clickEvents);
+    if (events.length >= n || Date.now() - t0 > timeoutMs) return events;
+    await new Promise((r) => setTimeout(r, 10));
+  }
+}
+
 describe("redirect hot path", () => {
   beforeEach(resetAll);
   afterEach(settle); // contain fire-and-forget recordClick inserts within their owning test
@@ -31,8 +42,7 @@ describe("redirect hot path", () => {
     expect(res.status).toBe(302);
     expect(res.headers.get("location")).toBe("https://example.com/target");
     expect(res.headers.get("cache-control")).toBe("no-store");
-    await settle();
-    const events = await db.select().from(clickEvents);
+    const events = await clicksLanded(1);
     expect(events).toHaveLength(1);
     expect(events[0]!.country).toBe("TH");
     expect(events[0]!.referrer).toBe("https://twitter.com/x");
@@ -72,8 +82,7 @@ describe("redirect hot path", () => {
     await seedLink("bot-target");
     const res = await hit("/bot-target", { "user-agent": "Slackbot-LinkExpanding 1.0" });
     expect(res.status).toBe(302);
-    await settle();
-    const events = await db.select().from(clickEvents);
+    const events = await clicksLanded(1);
     expect(events[0]!.deviceType).toBe("bot");
   });
 
