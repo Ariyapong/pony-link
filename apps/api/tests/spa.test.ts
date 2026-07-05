@@ -10,6 +10,7 @@ describe("SPA serving", () => {
     mkdirSync(`${SPA_DIR}/assets`, { recursive: true });
     writeFileSync(`${SPA_DIR}/index.html`, "<!doctype html><div id=root>spa</div>");
     writeFileSync(`${SPA_DIR}/assets/x.js`, "console.log(1)");
+    writeFileSync(`${SPA_DIR}/assets/x.css`, "body{}");
   });
 
   const hit = (path: string) => app.handle(new Request(`http://localhost${path}`));
@@ -25,6 +26,18 @@ describe("SPA serving", () => {
     const res = await hit("/app/assets/x.js");
     expect(res.status).toBe(200);
     expect(await res.text()).toBe("console.log(1)");
+  });
+
+  it("assets carry an explicit content-type (nosniff makes a missing one fatal)", async () => {
+    // Regression: Elysia's set.headers merge drops the content-type Bun infers
+    // for BunFile bodies — first deploy shipped text/plain assets and a blank
+    // dashboard. serve() must set the type explicitly.
+    const js = await hit("/app/assets/x.js");
+    expect(js.headers.get("content-type")).toStartWith("text/javascript");
+    const css = await hit("/app/assets/x.css");
+    expect(css.headers.get("content-type")).toStartWith("text/css");
+    const html = await hit("/app");
+    expect(html.headers.get("content-type")).toStartWith("text/html");
   });
 
   it("falls back to index.html for client-side routes", async () => {

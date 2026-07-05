@@ -18,7 +18,10 @@ async function serve(relPath: string): Promise<Response | null> {
   }
   const file = Bun.file(fullPath);
   if (await file.exists()) {
-    const headers: Record<string, string> = {};
+    // Explicit content-type: Elysia's set.headers merge (app.ts security
+    // headers) drops the type Bun infers for BunFile bodies — browsers then
+    // hard-fail assets under nosniff (blank dashboard, found in first deploy).
+    const headers: Record<string, string> = { "content-type": file.type };
     if (fullPath.endsWith(".html")) headers["content-security-policy"] = CSP;
     return new Response(file, { headers });
   }
