@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../api";
 import { useAuth } from "../auth";
+import logo from "../assets/images/pony-link.png";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -28,7 +29,10 @@ export default function Login() {
 
   return (
     <div className="mx-auto mt-24 max-w-sm px-4">
-      <h1 className="mb-6 text-2xl font-semibold">Log in</h1>
+      <section>
+        <img src={logo} alt="Pony Link" className="mx-auto mb-6 h-12 h-auto" />
+      </section>
+      <h1 className="mb-6 text-2xl font-semibold text-center">Log in</h1>
       <form onSubmit={submit} className="flex flex-col gap-3">
         <input className="rounded border border-gray-300 px-3 py-2" type="email" placeholder="Email"
           value={email} onChange={(e) => setEmail(e.target.value)} required />
@@ -39,9 +43,6 @@ export default function Login() {
           {busy ? "Logging in…" : "Log in"}
         </button>
       </form>
-      <p className="mt-6 text-center text-sm text-gray-400">
-        <a href="https://www.aritoton.com" className="underline">aritoton.com</a>
-      </p>
     </div>
   );
 }
