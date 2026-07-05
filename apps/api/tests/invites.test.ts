@@ -65,6 +65,28 @@ describe("invites", () => {
     expect(invites[0].status).toBe("pending");
   });
 
+  it("lists who used an invite and when", async () => {
+    const cookie = await adminCookie();
+    const created = await (
+      await req("/api/v1/invites", { method: "POST", cookie, body: JSON.stringify({ expiresInDays: 7 }) })
+    ).json();
+    const token = created.inviteUrl.split("#token=")[1];
+    const reg = await req("/api/v1/auth/register", {
+      method: "POST",
+      body: JSON.stringify({
+        token,
+        email: "friend@test.local",
+        password: "friend-pass-123",
+        displayName: "Friend",
+      }),
+    });
+    expect(reg.status).toBe(201);
+    const { invites } = await (await req("/api/v1/invites", { cookie })).json();
+    expect(invites[0].status).toBe("used");
+    expect(invites[0].usedAt).toBeTruthy();
+    expect(invites[0].usedBy).toMatchObject({ email: "friend@test.local", displayName: "Friend" });
+  });
+
   it("revokes an unused invite", async () => {
     const cookie = await adminCookie();
     const created = await (

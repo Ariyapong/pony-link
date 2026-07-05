@@ -1,7 +1,7 @@
 import { Elysia, t } from "elysia";
 import { desc, eq } from "drizzle-orm";
 import { db } from "../db/client";
-import { invites } from "../db/schema";
+import { invites, users } from "../db/schema";
 import { env } from "../env";
 import { randomToken, sha256Hex, UUID_RE } from "../lib/crypto";
 import { apiError } from "../lib/errors";
@@ -60,8 +60,19 @@ export const inviteRoutes = new Elysia({ prefix: "/api/v1/invites" })
   .get("/", async ({ session, set }) => {
     if (!session) return apiError(set, 401, "UNAUTHORIZED", "Not logged in");
     if (session.role !== "admin") return apiError(set, 403, "FORBIDDEN", "Admins only");
-    const rows = await db.select().from(invites).orderBy(desc(invites.expiresAt));
-    return { invites: rows.map(publicInvite) };
+    const rows = await db
+      .select({ invite: invites, usedByUser: users })
+      .from(invites)
+      .leftJoin(users, eq(invites.usedBy, users.id))
+      .orderBy(desc(invites.expiresAt));
+    return {
+      invites: rows.map(({ invite, usedByUser }) => ({
+        ...publicInvite(invite),
+        usedBy: usedByUser
+          ? { id: usedByUser.id, displayName: usedByUser.displayName, email: usedByUser.email }
+          : null,
+      })),
+    };
   })
   .delete("/:id", async ({ params, session, set }) => {
     if (!session) return apiError(set, 401, "UNAUTHORIZED", "Not logged in");

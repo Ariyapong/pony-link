@@ -4,6 +4,7 @@ import { api } from "../api";
 type Invite = {
   id: string; email: string | null; expiresAt: string;
   usedAt: string | null; status: "pending" | "used" | "expired";
+  usedBy: { id: string; displayName: string; email: string } | null;
 };
 
 export default function Invites() {
@@ -78,7 +79,14 @@ export default function Invites() {
             <span className={
               i.status === "pending" ? "text-emerald-600" : i.status === "used" ? "text-gray-500" : "text-red-500"
             }>{i.status}</span>
-            <span className="text-gray-400">expires {new Date(i.expiresAt).toLocaleDateString()}</span>
+            {i.usedBy && i.usedAt && (
+              <span className="text-gray-500">
+                by {i.usedBy.displayName} ({i.usedBy.email}) on {new Date(i.usedAt).toLocaleDateString()}
+              </span>
+            )}
+            {i.status !== "used" && (
+              <span className="text-gray-400">expires {new Date(i.expiresAt).toLocaleDateString()}</span>
+            )}
             {i.status === "pending" && (
               <button className="rounded border border-gray-300 px-2 py-1"
                 onClick={() => void api.api.v1.invites({ id: i.id }).delete().then(load)}>Revoke</button>
