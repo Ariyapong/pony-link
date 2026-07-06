@@ -1,6 +1,17 @@
 # Origin TLS = Cloudflare Origin CA cert (spec §3): ACME can't work behind the
 # orange cloud, and browsers not trusting this cert is a feature — direct-to-IP
 # visits fail TLS even if the firewall ever slips.
+gopony.link {
+	tls /etc/caddy/certs/gopony-origin.pem /etc/caddy/certs/gopony-origin-key.pem
+	encode gzip
+	header Strict-Transport-Security "max-age=31536000; includeSubDomains"
+	reverse_proxy app:3000
+}
+
+# Legacy hostname: links shared before the 2026-07 domain move live here
+# forever, so this block never goes away. Redirect-serving only — the
+# dashboard follows BASE_URL (gopony.link); logins here fail the CSRF
+# origin check by design.
 s.aritoton.com {
 	tls /etc/caddy/certs/origin.pem /etc/caddy/certs/origin-key.pem
 	encode gzip
