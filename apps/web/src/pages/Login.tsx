@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../api";
 import { useAuth } from "../auth";
-import logo from "../assets/images/pony-link.png";
+import logo from "../assets/images/pony-link-v2.png";
 
 export default function Login() {
   const [email, setEmail] = useState("");

@@ -3,7 +3,12 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Pony Link — aritoton</title>
+    <!-- %BASE_URL% → "/app/" in build and dev, keeps public/ assets on the right path -->
+    <link rel="icon" href="%BASE_URL%favicon.ico" sizes="48x48" />
+    <link rel="icon" type="image/png" sizes="32x32" href="%BASE_URL%favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="%BASE_URL%favicon-16x16.png" />
+    <link rel="apple-touch-icon" href="%BASE_URL%apple-touch-icon.png" />
+    <title>Pony Link</title>
   </head>
   <body>
     <div id="root"></div>
