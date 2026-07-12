@@ -54,6 +54,18 @@ ALTER DEFAULT PRIVILEGES FOR ROLE shortener IN SCHEMA public
 ALTER DEFAULT PRIVILEGES FOR ROLE shortener IN SCHEMA public
   GRANT USAGE, SELECT ON SEQUENCES TO ponylink_rw;
 
+-- Guardrails against the classic human-with-a-GUI outage --------------------
+-- auto-commit is OFF in DBeaver's write connection, so an UPDATE you forget to
+-- COMMIT keeps its ROW LOCKS — and the API's own writes to those rows then
+-- block, waiting on a human who went to lunch. Postgres ends the standoff by
+-- itself: an idle transaction is rolled back after 5 min. statement_timeout
+-- likewise stops a careless full scan from pinning the box. Neither applies to
+-- `shortener` (the app), only to these human roles.
+ALTER ROLE ponylink_ro SET idle_in_transaction_session_timeout = '5min';
+ALTER ROLE ponylink_rw SET idle_in_transaction_session_timeout = '5min';
+ALTER ROLE ponylink_ro SET statement_timeout = '60s';
+ALTER ROLE ponylink_rw SET statement_timeout = '60s';
+
 -- Sanity check. Expect:
 --   ponylink_ro  t f f f   has_password=f  (until step 2)
 --   ponylink_rw  t t t t   has_password=f  (until step 2)
