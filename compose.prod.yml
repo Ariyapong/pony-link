@@ -22,7 +22,13 @@ services:
       interval: 5s
       timeout: 3s
       retries: 12
-    # no ports: unreachable from the internet by construction (spec §9)
+    ports:
+      # Loopback ONLY — reachable solely from the droplet itself, i.e. through an
+      # SSH tunnel (DBeaver). Still unreachable from the internet by construction
+      # (spec §9): 127.0.0.1 is not a public interface, so the Docker-bypasses-ufw
+      # trap in lessons-learned #1 does not apply here. Never widen this to
+      # "5432:5432" — that WOULD publish Postgres to the world.
+      - "127.0.0.1:5432:5432"
 
   redis:
     image: redis:7-alpine
